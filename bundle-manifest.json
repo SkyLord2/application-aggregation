@@ -1,0 +1,108 @@
+{
+  "product_name": "小海智能助手",
+  "product_code": "xiaohai-assistant",
+  "version": "0.1.0",
+  "install_root": "C:\\\\Program Files\\\\XiaoHaiAssistant",
+  "prerequisites": {
+    "dotnet_fx48": {
+      "enabled": true,
+      "installer": {
+        "path": "payload/prereq/NDP48-x86-x64-AllOS-ENU.exe",
+        "args": ["/q", "/norestart"],
+        "success_exit_codes": [0, 3010]
+      }
+    },
+    "vcredist_2015_2022_x64": {
+      "enabled": true,
+      "installer": {
+        "path": "payload/prereq/VC_redist.x64.exe",
+        "args": ["/install", "/quiet", "/norestart"],
+        "success_exit_codes": [0, 3010]
+      }
+    }
+  },
+  "modules": [
+    {
+      "id": "hues",
+      "display_name": "HUES",
+      "enabled": false,
+      "kind": "exe",
+      "detect": "none",
+      "installer": {
+        "path": "payload/hues/Setup.exe",
+        "args": ["/S"],
+        "success_exit_codes": [0, 3010]
+      },
+      "uninstaller": {
+        "path": "payload/hues/Uninstall.exe",
+        "args": ["/S"],
+        "success_exit_codes": [0]
+      },
+      "remove_desktop_shortcuts": ["HUES"],
+      "plugin": {
+        "id": "hues",
+        "name": "HUES",
+        "exe": "HUES/HUES.exe",
+        "args": [],
+        "icon": null,
+        "healthcheck": "process"
+      },
+      "config": {
+        "server_url": null,
+        "data_subdir": "hues",
+        "file_replacements": []
+      }
+    },
+    {
+      "id": "demo-filecopy-app",
+      "display_name": "DemoApp(示例模块)",
+      "enabled": true,
+      "kind": "file_copy",
+      "detect": { "file_exists": { "path": "C:\\\\Program Files\\\\XiaoHaiAssistant\\\\demo-filecopy-app\\\\demo.txt" } },
+      "payload": { "path": "payload/demo-filecopy-app", "install_subdir": "demo-filecopy-app" },
+      "remove_desktop_shortcuts": [],
+      "plugin": {
+        "id": "demo",
+        "name": "示例应用",
+        "exe": "demo-filecopy-app/demo.txt",
+        "args": [],
+        "icon": null,
+        "healthcheck": "process"
+      },
+      "config": {
+        "server_url": null,
+        "data_subdir": "demo",
+        "file_replacements": []
+      }
+    }
+  ],
+  "shortcuts": {
+    "assistant_exe": "xiaohai-assistant.exe",
+    "assistant_name": "小海智能助手",
+    "icon_path": null,
+    "start_menu": true,
+    "desktop": true
+  },
+  "post_config": {
+    "server_url": "https://server.example.com",
+    "data_root": null,
+    "plugin_dir": null
+  },
+  "firewall": {
+    "enabled": false,
+    "rules": []
+  },
+  "service": {
+    "enabled": false,
+    "name": "XiaoHaiAssistantAgent",
+    "display_name": "XiaoHai Assistant Agent",
+    "description": "XiaoHai assistant background agent",
+    "exe": "xiaohai-agent.exe",
+    "args": []
+  },
+  "autorun": {
+    "enabled": true,
+    "name": "XiaoHaiAssistant",
+    "command": "\"C:\\\\Program Files\\\\XiaoHaiAssistant\\\\xiaohai-assistant.exe\""
+  }
+}

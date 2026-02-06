@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/xiaohai-agent",
+  "crates/xiaohai-assistant",
+  "crates/xiaohai-bootstrapper",
+  "crates/xiaohai-core",
+  "crates/xiaohai-windows",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Proprietary"
+
+[workspace.dependencies]
+anyhow = "1"
+bytes = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+rand = "0.8"
+
