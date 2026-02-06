@@ -1,1 +1,3 @@
 /target
+payload/*
+!payload/.gitkeep
