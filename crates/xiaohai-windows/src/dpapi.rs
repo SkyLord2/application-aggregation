@@ -13,7 +13,7 @@
 //! 修改时间：2026-02-04
 
 use anyhow::{Context, Result};
-use windows::Win32::Foundation::{HLOCAL, LocalFree};
+use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPTPROTECT_LOCAL_MACHINE, CRYPT_INTEGER_BLOB,
 };
@@ -50,7 +50,9 @@ pub fn protect_local_machine(plain: &[u8]) -> Result<Vec<u8>> {
         .ok()
         .context("CryptProtectData 失败")?;
         // 将系统分配的缓冲区复制到 Rust Vec，随后释放系统缓冲区，避免内存泄漏。
-        let bytes = std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize).to_vec();
+        let bytes =
+            std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
+                .to_vec();
         let _ = LocalFree(HLOCAL(out_blob.pbData as *mut core::ffi::c_void));
         Ok(bytes)
     }
@@ -80,7 +82,9 @@ pub fn unprotect_local_machine(cipher: &[u8]) -> Result<Vec<u8>> {
             .ok()
             .context("CryptUnprotectData 失败")?;
         // 将系统分配的缓冲区复制到 Rust Vec，随后释放系统缓冲区，避免内存泄漏。
-        let bytes = std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize).to_vec();
+        let bytes =
+            std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
+                .to_vec();
         let _ = LocalFree(HLOCAL(out_blob.pbData as *mut core::ffi::c_void));
         Ok(bytes)
     }
@@ -99,4 +103,3 @@ pub fn unprotect_local_machine(cipher: &[u8]) -> Result<Vec<u8>> {
 pub fn protect_string_local_machine(s: &str) -> Result<Vec<u8>> {
     protect_local_machine(s.as_bytes()).context("保护字符串失败")
 }
-

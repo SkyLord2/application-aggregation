@@ -88,6 +88,10 @@ fn run_netsh(args: &[&str]) -> Result<()> {
     }
     let stderr = String::from_utf8_lossy(&out.stderr);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    Err(anyhow!("netsh 执行失败: {}\n{}\n{}", out.status, stdout, stderr))
+    Err(anyhow!(
+        "netsh 执行失败: {}\n{}\n{}",
+        out.status,
+        stdout,
+        stderr
+    ))
 }
-

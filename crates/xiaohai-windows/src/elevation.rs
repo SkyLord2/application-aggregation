@@ -21,4 +21,3 @@ use windows::Win32::UI::Shell::IsUserAnAdmin;
 pub fn is_running_as_admin() -> Result<bool> {
     unsafe { Ok(IsUserAnAdmin().as_bool()) }
 }
-

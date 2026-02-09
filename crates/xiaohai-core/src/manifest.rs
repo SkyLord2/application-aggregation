@@ -459,4 +459,3 @@ mod tests {
         assert!(matches!(v, DetectRule::None));
     }
 }
-

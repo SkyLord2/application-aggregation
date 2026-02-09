@@ -62,7 +62,10 @@ enum Commands {
 /// - 任意子命令执行失败会返回 `Err` 并输出日志（由调用方/控制台显示）。
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("info".parse().unwrap()),
+        )
         .with_target(false)
         .init();
 
@@ -92,6 +95,13 @@ fn load_manifest(path: &Path) -> Result<BundleManifest> {
     Ok(manifest)
 }
 
+fn allow_non_admin_for_tests() -> bool {
+    matches!(
+        std::env::var("XIAOHAI_TEST_ALLOW_NON_ADMIN").as_deref(),
+        Ok("1")
+    )
+}
+
 /// 执行安装流程（按清单编排）。
 ///
 /// 参数：
@@ -108,7 +118,7 @@ fn load_manifest(path: &Path) -> Result<BundleManifest> {
 /// 异常处理：
 /// - 任一模块安装失败将终止流程并返回错误；上层可据此中止批量部署。
 fn install(cli: &Cli) -> Result<()> {
-    if !elevation::is_running_as_admin()? {
+    if !allow_non_admin_for_tests() && !elevation::is_running_as_admin()? {
         return Err(anyhow!("安装需要管理员权限，请以管理员方式运行"));
     }
 
@@ -147,11 +157,17 @@ fn install(cli: &Cli) -> Result<()> {
         let install_root = PathBuf::from(&manifest.install_root);
         match module.kind {
             ModuleKind::Msi | ModuleKind::Exe => {
-                let installer = module.installer.clone().ok_or_else(|| anyhow!("模块缺少 installer 配置: {}", module.id))?;
+                let installer = module
+                    .installer
+                    .clone()
+                    .ok_or_else(|| anyhow!("模块缺少 installer 配置: {}", module.id))?;
                 run_installer(&base_dir, &installer)?;
             }
             ModuleKind::FileCopy => {
-                let payload = module.payload.clone().ok_or_else(|| anyhow!("FileCopy 模块缺少 payload 配置: {}", module.id))?;
+                let payload = module
+                    .payload
+                    .clone()
+                    .ok_or_else(|| anyhow!("FileCopy 模块缺少 payload 配置: {}", module.id))?;
                 let src = paths::resolve_path(&base_dir, &payload.path)?;
                 let dst = if let Some(subdir) = payload.install_subdir.as_deref() {
                     install_root.join(subdir)
@@ -202,7 +218,7 @@ fn install(cli: &Cli) -> Result<()> {
 /// - 回滚阶段以“尽力而为”为主（失败不阻塞后续卸载）
 /// - 模块卸载阶段若执行卸载器失败会返回错误
 fn uninstall(cli: &Cli) -> Result<()> {
-    if !elevation::is_running_as_admin()? {
+    if !allow_non_admin_for_tests() && !elevation::is_running_as_admin()? {
         return Err(anyhow!("卸载需要管理员权限，请以管理员方式运行"));
     }
 
@@ -258,12 +274,20 @@ fn uninstall(cli: &Cli) -> Result<()> {
                     info!("卸载模块: {} ({})", module.display_name, module.id);
                     run_installer(&base_dir, &uninstaller)?;
                 } else {
-                    warn!("模块未提供卸载配置，跳过: {} ({})", module.display_name, module.id);
+                    warn!(
+                        "模块未提供卸载配置，跳过: {} ({})",
+                        module.display_name, module.id
+                    );
                 }
             }
             ModuleKind::FileCopy => {
                 let install_root = PathBuf::from(&manifest.install_root);
-                let dir = install_root.join(&module.id);
+                let dir = module
+                    .payload
+                    .as_ref()
+                    .and_then(|p| p.install_subdir.as_deref())
+                    .map(|subdir| install_root.join(subdir))
+                    .unwrap_or_else(|| install_root.join(&module.id));
                 if dir.exists() {
                     info!("删除模块目录: {}", dir.display());
                     let _ = std::fs::remove_dir_all(&dir);
@@ -323,7 +347,10 @@ fn detect(cli: &Cli) -> Result<()> {
 fn doctor(_cli: &Cli) -> Result<()> {
     println!("admin = {}", elevation::is_running_as_admin()?);
     println!("dotnet_fx48 = {:?}", prereq::dotnet_fx48_status()?);
-    println!("vcredist_2015_2022_x64 = {:?}", prereq::vcredist_2015_2022_x64_status()?);
+    println!(
+        "vcredist_2015_2022_x64 = {:?}",
+        prereq::vcredist_2015_2022_x64_status()?
+    );
     Ok(())
 }
 
@@ -364,7 +391,10 @@ fn install_prerequisites(manifest: &BundleManifest, base_dir: &Path) -> Result<(
         }
     }
     if manifest.prerequisites.vcredist_2015_2022_x64.enabled {
-        if matches!(prereq::vcredist_2015_2022_x64_status()?, prereq::PrereqStatus::Missing) {
+        if matches!(
+            prereq::vcredist_2015_2022_x64_status()?,
+            prereq::PrereqStatus::Missing
+        ) {
             let installer = manifest
                 .prerequisites
                 .vcredist_2015_2022_x64
@@ -392,7 +422,10 @@ fn install_prerequisites(manifest: &BundleManifest, base_dir: &Path) -> Result<(
 ///
 /// 异常处理：
 /// - 注册表读取/路径解析失败会返回错误
-fn detect_module_installed(base_dir: &Path, module: &xiaohai_core::manifest::ModuleManifest) -> Result<bool> {
+fn detect_module_installed(
+    base_dir: &Path,
+    module: &xiaohai_core::manifest::ModuleManifest,
+) -> Result<bool> {
     match &module.detect {
         DetectRule::None => Ok(false),
         DetectRule::RegistryValue(rule) => registry::detect_registry_rule(rule),
@@ -416,7 +449,9 @@ fn run_installer(base_dir: &Path, installer: &PayloadInstaller) -> Result<()> {
     let exe = paths::resolve_path(base_dir, &installer.path)?;
     let mut cmd = Command::new(&exe);
     cmd.args(&installer.args);
-    let out = cmd.output().with_context(|| format!("启动安装程序失败: {}", exe.display()))?;
+    let out = cmd
+        .output()
+        .with_context(|| format!("启动安装程序失败: {}", exe.display()))?;
     let code = out.status.code().unwrap_or(-1);
     let mut ok_codes = installer.success_exit_codes.clone();
     if ok_codes.is_empty() {
@@ -453,12 +488,15 @@ fn copy_recursively(src: &Path, dst: &Path) -> Result<()> {
         if let Some(parent) = dst.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::copy(src, dst).with_context(|| format!("复制文件失败: {} -> {}", src.display(), dst.display()))?;
+        std::fs::copy(src, dst)
+            .with_context(|| format!("复制文件失败: {} -> {}", src.display(), dst.display()))?;
         return Ok(());
     }
 
     std::fs::create_dir_all(dst).with_context(|| format!("创建目录失败: {}", dst.display()))?;
-    for entry in std::fs::read_dir(src).with_context(|| format!("读取目录失败: {}", src.display()))? {
+    for entry in
+        std::fs::read_dir(src).with_context(|| format!("读取目录失败: {}", src.display()))?
+    {
         let entry = entry?;
         let file_type = entry.file_type()?;
         let from = entry.path();
@@ -466,7 +504,8 @@ fn copy_recursively(src: &Path, dst: &Path) -> Result<()> {
         if file_type.is_dir() {
             copy_recursively(&from, &to)?;
         } else {
-            std::fs::copy(&from, &to).with_context(|| format!("复制文件失败: {} -> {}", from.display(), to.display()))?;
+            std::fs::copy(&from, &to)
+                .with_context(|| format!("复制文件失败: {} -> {}", from.display(), to.display()))?;
         }
     }
     Ok(())
@@ -485,7 +524,11 @@ fn copy_recursively(src: &Path, dst: &Path) -> Result<()> {
 ///
 /// 异常处理：
 /// - 读写配置文件失败会返回错误
-fn apply_module_config(base_dir: &Path, manifest: &BundleManifest, module: &xiaohai_core::manifest::ModuleManifest) -> Result<()> {
+fn apply_module_config(
+    base_dir: &Path,
+    manifest: &BundleManifest,
+    module: &xiaohai_core::manifest::ModuleManifest,
+) -> Result<()> {
     let install_root = PathBuf::from(&manifest.install_root);
     let data_root = manifest
         .post_config
@@ -505,11 +548,13 @@ fn apply_module_config(base_dir: &Path, manifest: &BundleManifest, module: &xiao
             warn!("配置文件不存在，跳过: {}", target.display());
             continue;
         }
-        let mut content = std::fs::read_to_string(&target).with_context(|| format!("读取配置文件失败: {}", target.display()))?;
+        let mut content = std::fs::read_to_string(&target)
+            .with_context(|| format!("读取配置文件失败: {}", target.display()))?;
         for kv in &fr.replacements {
             content = content.replace(&kv.key, &kv.value);
         }
-        std::fs::write(&target, content).with_context(|| format!("写入配置文件失败: {}", target.display()))?;
+        std::fs::write(&target, content)
+            .with_context(|| format!("写入配置文件失败: {}", target.display()))?;
     }
 
     if let Some(url) = &module.config.server_url {
@@ -539,14 +584,20 @@ fn write_plugins(base_dir: &Path, manifest: &BundleManifest) -> Result<()> {
         if !module.enabled {
             continue;
         }
-        let Some(plugin) = &module.plugin else { continue };
+        let Some(plugin) = &module.plugin else {
+            continue;
+        };
         let mut plugin_value = serde_json::to_value(plugin).context("序列化插件失败")?;
         if let Some(obj) = plugin_value.as_object_mut() {
-            obj.insert("module_id".to_string(), serde_json::Value::String(module.id.clone()));
+            obj.insert(
+                "module_id".to_string(),
+                serde_json::Value::String(module.id.clone()),
+            );
         }
         let bytes = serde_json::to_vec_pretty(&plugin_value)?;
         let file = plugin_dir.join(format!("{}.json", plugin.id));
-        std::fs::write(&file, bytes).with_context(|| format!("写入插件文件失败: {}", file.display()))?;
+        std::fs::write(&file, bytes)
+            .with_context(|| format!("写入插件文件失败: {}", file.display()))?;
 
         let _ = base_dir;
     }
@@ -588,7 +639,8 @@ fn manage_shortcuts(manifest: &BundleManifest, state: &mut InstallState) -> Resu
         let _ = shortcut::remove_shortcuts_from_desktop(&module.remove_desktop_shortcuts)?;
     }
 
-    let assistant_exe = PathBuf::from(&manifest.install_root).join(&manifest.shortcuts.assistant_exe);
+    let assistant_exe =
+        PathBuf::from(&manifest.install_root).join(&manifest.shortcuts.assistant_exe);
     let icon = manifest
         .shortcuts
         .icon_path
@@ -644,7 +696,8 @@ fn install_service_and_firewall(manifest: &BundleManifest, state: &mut InstallSt
             manifest.autorun.name.clone()
         };
         let command = if manifest.autorun.command.is_empty() {
-            let assistant_exe = PathBuf::from(&manifest.install_root).join(&manifest.shortcuts.assistant_exe);
+            let assistant_exe =
+                PathBuf::from(&manifest.install_root).join(&manifest.shortcuts.assistant_exe);
             format!("\"{}\"", assistant_exe.display())
         } else {
             manifest.autorun.command.clone()
@@ -685,6 +738,7 @@ fn install_service_and_firewall(manifest: &BundleManifest, state: &mut InstallSt
 fn persist_state(state: &InstallState) -> Result<()> {
     let path = paths::default_state_file()?;
     let bytes = serde_json::to_vec_pretty(state).context("序列化 install-state.json 失败")?;
-    std::fs::write(&path, bytes).with_context(|| format!("写入状态文件失败: {}", path.display()))?;
+    std::fs::write(&path, bytes)
+        .with_context(|| format!("写入状态文件失败: {}", path.display()))?;
     Ok(())
 }

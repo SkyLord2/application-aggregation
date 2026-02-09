@@ -51,9 +51,17 @@ pub enum IpcResponse {
     /// `Ping` 的响应。
     Pong { request_id: Uuid },
     /// `GetSsoToken` 的响应。
-    SsoToken { request_id: Uuid, token: String, expires_at_unix: i64 },
+    SsoToken {
+        request_id: Uuid,
+        token: String,
+        expires_at_unix: i64,
+    },
     /// `GetAppStatus` 的响应。
-    AppStatus { request_id: Uuid, app_id: String, running: bool },
+    AppStatus {
+        request_id: Uuid,
+        app_id: String,
+        running: bool,
+    },
     /// 请求处理失败的通用错误。
     ///
     /// 参数：
@@ -61,4 +69,3 @@ pub enum IpcResponse {
     /// - `message`：错误描述（避免包含敏感信息）
     Error { request_id: Uuid, message: String },
 }
-

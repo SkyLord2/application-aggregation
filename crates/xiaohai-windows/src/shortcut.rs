@@ -22,11 +22,13 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use windows::core::{Interface, PCWSTR, PWSTR};
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+    COINIT_APARTMENTTHREADED,
 };
 use windows::Win32::System::Com::{CoTaskMemFree, IPersistFile};
 use windows::Win32::UI::Shell::{
-    IShellLinkW, ShellLink, SHGetKnownFolderPath, FOLDERID_Desktop, FOLDERID_Programs, KF_FLAG_DEFAULT,
+    FOLDERID_Desktop, FOLDERID_Programs, IShellLinkW, SHGetKnownFolderPath, ShellLink,
+    KF_FLAG_DEFAULT,
 };
 
 /// 快捷方式放置位置。
@@ -62,7 +64,8 @@ pub fn create_shortcut(
     icon: Option<(&Path, i32)>,
 ) -> Result<PathBuf> {
     let folder = known_folder(location)?;
-    std::fs::create_dir_all(&folder).with_context(|| format!("创建快捷方式目录失败: {}", folder.display()))?;
+    std::fs::create_dir_all(&folder)
+        .with_context(|| format!("创建快捷方式目录失败: {}", folder.display()))?;
 
     let link_path = folder.join(format!("{name}.lnk"));
 
@@ -73,7 +76,8 @@ pub fn create_shortcut(
             .context("COM 初始化失败")?;
         let _guard = ComGuard;
 
-        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).context("创建 ShellLink 实例失败")?;
+        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)
+            .context("创建 ShellLink 实例失败")?;
 
         // COM 接口以宽字符串（UTF-16，NUL 结尾）接收路径与参数。
         link.SetPath(PCWSTR(to_wide(target_exe.as_os_str()).as_ptr()))
@@ -120,7 +124,8 @@ pub fn remove_shortcut_by_name(location: ShortcutLocation, name: &str) -> Result
     let folder = known_folder(location)?;
     let link_path = folder.join(format!("{name}.lnk"));
     if link_path.exists() {
-        std::fs::remove_file(&link_path).with_context(|| format!("删除快捷方式失败: {}", link_path.display()))?;
+        std::fs::remove_file(&link_path)
+            .with_context(|| format!("删除快捷方式失败: {}", link_path.display()))?;
         return Ok(true);
     }
     Ok(false)
@@ -142,7 +147,8 @@ pub fn remove_shortcuts_from_desktop(names: &[String]) -> Result<Vec<PathBuf>> {
     for n in names {
         let p = desktop.join(format!("{n}.lnk"));
         if p.exists() {
-            std::fs::remove_file(&p).with_context(|| format!("删除桌面快捷方式失败: {}", p.display()))?;
+            std::fs::remove_file(&p)
+                .with_context(|| format!("删除桌面快捷方式失败: {}", p.display()))?;
             removed.push(p);
         }
     }
@@ -165,7 +171,8 @@ fn known_folder(location: ShortcutLocation) -> Result<PathBuf> {
         ShortcutLocation::StartMenuPrograms => &FOLDERID_Programs,
     };
     unsafe {
-        let path_ptr: PWSTR = SHGetKnownFolderPath(folder_id, KF_FLAG_DEFAULT, None).context("读取 Known Folder 失败")?;
+        let path_ptr: PWSTR = SHGetKnownFolderPath(folder_id, KF_FLAG_DEFAULT, None)
+            .context("读取 Known Folder 失败")?;
         // SHGetKnownFolderPath 返回的内存由 COM 分配，必须用 CoTaskMemFree 释放。
         let _guard = CoTaskMemGuard(path_ptr);
         let s = path_ptr.to_string().context("Known Folder 路径解码失败")?;
@@ -205,4 +212,3 @@ impl Drop for CoTaskMemGuard {
         }
     }
 }
-

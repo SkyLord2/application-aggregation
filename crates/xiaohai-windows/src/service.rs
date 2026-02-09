@@ -39,7 +39,8 @@ pub fn install_service(
     args: &[String],
 ) -> Result<()> {
     let manager_access = ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE;
-    let service_manager = ServiceManager::local_computer(None::<&str>, manager_access).context("打开 ServiceManager 失败")?;
+    let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)
+        .context("打开 ServiceManager 失败")?;
 
     let mut launch_arguments: Vec<OsString> = Vec::new();
     for a in args {
@@ -71,7 +72,9 @@ pub fn install_service(
         .context("创建/打开服务失败")?;
 
     if !description.is_empty() {
-        service.set_description(description).context("设置服务描述失败")?;
+        service
+            .set_description(description)
+            .context("设置服务描述失败")?;
     }
     Ok(())
 }
@@ -85,11 +88,13 @@ pub fn install_service(
 /// - 打开服务或删除服务失败时返回错误（通常是权限不足或服务不存在/被占用）。
 pub fn uninstall_service(service_name: &str) -> Result<()> {
     let manager_access = ServiceManagerAccess::CONNECT;
-    let service_manager = ServiceManager::local_computer(None::<&str>, manager_access).context("打开 ServiceManager 失败")?;
+    let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)
+        .context("打开 ServiceManager 失败")?;
     let service = service_manager
         .open_service(service_name, ServiceAccess::DELETE)
         .with_context(|| format!("打开服务失败: {service_name}"))?;
-    service.delete().with_context(|| format!("删除服务失败: {service_name}"))?;
+    service
+        .delete()
+        .with_context(|| format!("删除服务失败: {service_name}"))?;
     Ok(())
 }
-

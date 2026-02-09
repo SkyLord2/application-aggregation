@@ -89,4 +89,3 @@ pub fn resolve_path(base: &Path, raw: &str) -> Result<PathBuf> {
         Ok(base.join(p))
     }
 }
-

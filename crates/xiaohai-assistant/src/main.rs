@@ -25,7 +25,7 @@ use rand::RngCore;
 use time::Duration;
 use tracing::{info, warn};
 use uuid::Uuid;
-use xiaohai_core::auth::{TokenIssuer, TokenClaims};
+use xiaohai_core::auth::{TokenClaims, TokenIssuer};
 use xiaohai_core::ipc::{IpcRequest, IpcResponse};
 use xiaohai_core::paths;
 use xiaohai_core::state::InstallState;
@@ -57,7 +57,10 @@ struct LoadedPlugin {
 /// - 关键步骤（状态文件读取/密钥读取/IPC 启动/GUI 启动）失败会返回错误
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("info".parse().unwrap()),
+        )
         .with_target(false)
         .init();
 
@@ -69,19 +72,21 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| current_exe_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     let secret = load_or_create_auth_secret()?;
-    let issuer = TokenIssuer::new(secret, install_state.as_ref().map(|s| s.product_code.clone()).unwrap_or_else(|| "xiaohai".to_string()));
+    let issuer = TokenIssuer::new(
+        secret,
+        install_state
+            .as_ref()
+            .map(|s| s.product_code.clone())
+            .unwrap_or_else(|| "xiaohai".to_string()),
+    );
 
     let server = IpcServer::start(issuer.clone())?;
     info!("IPC server listening on {}", server.addr);
 
     let app_state = AppState::new(install_root, server.addr, issuer);
     let options = eframe::NativeOptions::default();
-    eframe::run_native(
-        "小海智能助手",
-        options,
-        Box::new(|_cc| Box::new(app_state)),
-    )
-    .map_err(|e| anyhow::anyhow!("启动 GUI 失败: {e}"))?;
+    eframe::run_native("小海智能助手", options, Box::new(|_cc| Box::new(app_state)))
+        .map_err(|e| anyhow::anyhow!("启动 GUI 失败: {e}"))?;
     Ok(())
 }
 
@@ -94,8 +99,9 @@ fn main() -> Result<()> {
 /// - 文件不存在/读取失败/解析失败会返回错误
 fn load_install_state() -> Result<InstallState> {
     let path = paths::default_state_file()?;
-    let bytes = std::fs::read(&path).with_context(|| format!("读取状态文件失败: {}", path.display()))?;
-    Ok(serde_json::from_slice(&bytes).context("解析状态文件失败")?)
+    let bytes =
+        std::fs::read(&path).with_context(|| format!("读取状态文件失败: {}", path.display()))?;
+    serde_json::from_slice(&bytes).context("解析状态文件失败")
 }
 
 /// 获取当前可执行文件所在目录。
@@ -224,7 +230,10 @@ async fn run_ipc_loop(listener: std::net::TcpListener, issuer: TokenIssuer) -> R
 fn handle_ipc(req: IpcRequest, issuer: &TokenIssuer) -> IpcResponse {
     match req {
         IpcRequest::Ping { request_id } => IpcResponse::Pong { request_id },
-        IpcRequest::GetSsoToken { request_id, subject } => {
+        IpcRequest::GetSsoToken {
+            request_id,
+            subject,
+        } => {
             let ttl = Duration::minutes(30);
             let token = issuer.issue(subject, ttl);
             let claims: TokenClaims = match issuer.verify(&token, Duration::seconds(30)) {
@@ -242,19 +251,17 @@ fn handle_ipc(req: IpcRequest, issuer: &TokenIssuer) -> IpcResponse {
                 expires_at_unix: claims.expires_at_unix,
             }
         }
-        IpcRequest::GetAppStatus { request_id, app_id } => {
-            match get_app_running_status(&app_id) {
-                Ok(running) => IpcResponse::AppStatus {
-                    request_id,
-                    app_id,
-                    running,
-                },
-                Err(e) => IpcResponse::Error {
-                    request_id,
-                    message: e.to_string(),
-                },
-            }
-        }
+        IpcRequest::GetAppStatus { request_id, app_id } => match get_app_running_status(&app_id) {
+            Ok(running) => IpcResponse::AppStatus {
+                request_id,
+                app_id,
+                running,
+            },
+            Err(e) => IpcResponse::Error {
+                request_id,
+                message: e.to_string(),
+            },
+        },
     }
 }
 
@@ -343,28 +350,10 @@ impl AppState {
     /// - 当前实现以“尽力而为”为主：读取/解析失败的文件会被忽略，不影响其他插件加载
     fn reload_plugins(&self) {
         let plugin_dir = paths::default_plugin_dir().ok();
-        let mut loaded = Vec::new();
-        if let Some(dir) = plugin_dir {
-            if let Ok(entries) = std::fs::read_dir(&dir) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if p.extension().and_then(|s| s.to_str()) != Some("json") {
-                        continue;
-                    }
-                    match std::fs::read_to_string(&p)
-                        .ok()
-                        .and_then(|s| serde_json::from_str::<PluginFile>(&s).ok())
-                    {
-                        Some(f) => loaded.push(LoadedPlugin {
-                            module_id: f.module_id,
-                            plugin: f.plugin,
-                            file_path: p,
-                        }),
-                        None => {}
-                    }
-                }
-            }
-        }
+        let loaded = plugin_dir
+            .as_deref()
+            .map(load_plugins_from_dir)
+            .unwrap_or_default();
         *self.plugins.lock().unwrap() = loaded;
     }
 
@@ -386,7 +375,8 @@ impl AppState {
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(&p.plugin.args);
         cmd.env("XIAOHAI_IPC_ADDR", self.ipc_addr.to_string());
-        cmd.spawn().with_context(|| format!("启动应用失败: {}", exe.display()))?;
+        cmd.spawn()
+            .with_context(|| format!("启动应用失败: {}", exe.display()))?;
         Ok(())
     }
 }
@@ -403,6 +393,32 @@ fn resolve_under_install_root(install_root: &Path, raw: &str) -> PathBuf {
     } else {
         install_root.join(p)
     }
+}
+
+fn load_plugins_from_dir(dir: &Path) -> Vec<LoadedPlugin> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+
+    let mut loaded = Vec::new();
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(f) = std::fs::read_to_string(&p)
+            .ok()
+            .and_then(|s| serde_json::from_str::<PluginFile>(&s).ok())
+        else {
+            continue;
+        };
+        loaded.push(LoadedPlugin {
+            module_id: f.module_id,
+            plugin: f.plugin,
+            file_path: p,
+        });
+    }
+    loaded
 }
 
 impl eframe::App for AppState {
@@ -460,5 +476,43 @@ impl eframe::App for AppState {
         });
 
         ctx.request_repaint_after(std::time::Duration::from_millis(250));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    #[test]
+    fn load_plugins_from_dir_skips_invalid_files() {
+        let dir = unique_temp_dir("xiaohai-assistant-plugins");
+        let _cleanup = CleanupDir(dir.clone());
+
+        std::fs::write(
+            dir.join("a.json"),
+            r#"{"module_id":"m1","id":"p1","name":"Plugin1","exe":"a.exe","args":[],"icon":null,"healthcheck":"process"}"#,
+        )
+        .expect("write a.json");
+        std::fs::write(dir.join("b.json"), r#"{"not":"valid"}"#).expect("write b.json");
+        std::fs::write(dir.join("c.txt"), "nope").expect("write c.txt");
+
+        let plugins = load_plugins_from_dir(&dir);
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0].module_id, "m1");
+        assert_eq!(plugins[0].plugin.id, "p1");
+    }
+
+    struct CleanupDir(PathBuf);
+
+    impl Drop for CleanupDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
     }
 }

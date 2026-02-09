@@ -44,7 +44,10 @@ struct Args {
 /// - 服务调度器启动失败会返回错误
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("info".parse().unwrap()),
+        )
         .with_target(false)
         .init();
 
@@ -82,17 +85,24 @@ fn my_service_main(_arguments: Vec<OsString>) {
 /// 异常处理：
 /// - 注册/上报状态失败会返回错误（通常为服务环境异常）
 fn run_service() -> Result<()> {
-    let service_name = SERVICE_NAME.get().map(|s| s.as_str()).unwrap_or("XiaoHaiAssistantAgent");
+    let service_name = SERVICE_NAME
+        .get()
+        .map(|s| s.as_str())
+        .unwrap_or("XiaoHaiAssistantAgent");
 
-    let status_handle = service_control_handler::register(service_name, move |control_event| match control_event {
-        ServiceControl::Stop => {
-            // SCM 请求停止：通过原子标志通知主循环退出。
-            STOP_REQUESTED.store(true, Ordering::SeqCst);
-            ServiceControlHandlerResult::NoError
-        }
-        ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
-        _ => ServiceControlHandlerResult::NotImplemented,
-    })?;
+    let status_handle =
+        service_control_handler::register(
+            service_name,
+            move |control_event| match control_event {
+                ServiceControl::Stop => {
+                    // SCM 请求停止：通过原子标志通知主循环退出。
+                    STOP_REQUESTED.store(true, Ordering::SeqCst);
+                    ServiceControlHandlerResult::NoError
+                }
+                ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
+                _ => ServiceControlHandlerResult::NotImplemented,
+            },
+        )?;
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,

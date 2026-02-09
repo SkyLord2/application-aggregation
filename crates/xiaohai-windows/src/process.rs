@@ -40,7 +40,7 @@ pub fn is_process_running_by_exe(exe_path: &Path) -> Result<bool> {
     if needle.is_empty() {
         return Ok(false);
     }
-    for (_pid, proc_) in system.processes() {
+    for proc_ in system.processes().values() {
         let name = proc_.name().to_ascii_lowercase();
         if name == needle {
             return Ok(true);
@@ -48,4 +48,3 @@ pub fn is_process_running_by_exe(exe_path: &Path) -> Result<bool> {
     }
     Ok(false)
 }
-

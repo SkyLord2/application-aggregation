@@ -52,7 +52,8 @@ impl TokenClaims {
     /// - 解析成功：对应时间
     /// - 解析失败：返回 `UNIX_EPOCH` 作为降级值（避免因坏数据 panic）
     pub fn issued_at(&self) -> OffsetDateTime {
-        OffsetDateTime::from_unix_timestamp(self.issued_at_unix).unwrap_or_else(|_| OffsetDateTime::UNIX_EPOCH)
+        OffsetDateTime::from_unix_timestamp(self.issued_at_unix)
+            .unwrap_or(OffsetDateTime::UNIX_EPOCH)
     }
 
     /// 将 `expires_at_unix` 转换为 [`OffsetDateTime`]。
@@ -61,7 +62,8 @@ impl TokenClaims {
     /// - 解析成功：对应时间
     /// - 解析失败：返回 `UNIX_EPOCH` 作为降级值（避免因坏数据 panic）
     pub fn expires_at(&self) -> OffsetDateTime {
-        OffsetDateTime::from_unix_timestamp(self.expires_at_unix).unwrap_or_else(|_| OffsetDateTime::UNIX_EPOCH)
+        OffsetDateTime::from_unix_timestamp(self.expires_at_unix)
+            .unwrap_or(OffsetDateTime::UNIX_EPOCH)
     }
 }
 
@@ -101,7 +103,10 @@ impl TokenIssuer {
     /// - `secret`：HMAC 密钥（建议 32 字节以上）
     /// - `product_code`：产品标识（写入 claims，用于多套件隔离）
     pub fn new(secret: Vec<u8>, product_code: String) -> Self {
-        Self { secret, product_code }
+        Self {
+            secret,
+            product_code,
+        }
     }
 
     /// 签发一个短期令牌。
@@ -153,7 +158,11 @@ impl TokenIssuer {
     /// - Base64 解码失败或 JSON 反序列化失败：`Decode`
     /// - HMAC 校验失败：`BadSignature`
     /// - 时间窗口校验失败：`Expired` / `NotYetValid`
-    pub fn verify(&self, token: &str, allowed_clock_skew: Duration) -> Result<TokenClaims, TokenError> {
+    pub fn verify(
+        &self,
+        token: &str,
+        allowed_clock_skew: Duration,
+    ) -> Result<TokenClaims, TokenError> {
         // 期望格式：v1.payload.sig（分隔符为 '.'）
         let mut parts = token.split('.');
         let version = parts.next().ok_or(TokenError::BadFormat)?;
@@ -175,11 +184,14 @@ impl TokenIssuer {
             .map_err(|_| TokenError::Decode)?;
 
         // 先验签再反序列化，避免对不可信 payload 做昂贵/危险解析。
-        let mut mac = HmacSha256::new_from_slice(&self.secret).map_err(|_| TokenError::BadSignature)?;
+        let mut mac =
+            HmacSha256::new_from_slice(&self.secret).map_err(|_| TokenError::BadSignature)?;
         mac.update(&payload);
-        mac.verify_slice(&sig).map_err(|_| TokenError::BadSignature)?;
+        mac.verify_slice(&sig)
+            .map_err(|_| TokenError::BadSignature)?;
 
-        let claims: TokenClaims = serde_json::from_slice(&payload).map_err(|_| TokenError::Decode)?;
+        let claims: TokenClaims =
+            serde_json::from_slice(&payload).map_err(|_| TokenError::Decode)?;
         let now = OffsetDateTime::now_utc();
         let issued_at = claims.issued_at();
         let expires_at = claims.expires_at();
@@ -193,4 +205,3 @@ impl TokenIssuer {
         Ok(claims)
     }
 }
-

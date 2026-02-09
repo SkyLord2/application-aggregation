@@ -51,4 +51,3 @@ pub fn vcredist_2015_2022_x64_status() -> Result<PrereqStatus> {
         PrereqStatus::Missing
     })
 }
-

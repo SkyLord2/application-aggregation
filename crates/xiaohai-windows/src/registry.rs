@@ -16,7 +16,9 @@
 use anyhow::{Context, Result};
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 use winreg::RegKey;
-use xiaohai_core::manifest::{RegistryExpectedValue, RegistryHive, RegistryValueKind, RegistryValueRule};
+use xiaohai_core::manifest::{
+    RegistryExpectedValue, RegistryHive, RegistryValueKind, RegistryValueRule,
+};
 
 /// 按清单规则检测注册表值是否满足期望。
 ///
@@ -34,10 +36,14 @@ pub fn detect_registry_rule(rule: &RegistryValueRule) -> Result<bool> {
         RegistryHive::Hklm => RegKey::predef(HKEY_LOCAL_MACHINE),
         RegistryHive::Hkcu => RegKey::predef(HKEY_CURRENT_USER),
     };
-    let key = root.open_subkey(&rule.key).with_context(|| format!("打开注册表键失败: {}\\{}", hive_name(rule.hive), rule.key))?;
+    let key = root
+        .open_subkey(&rule.key)
+        .with_context(|| format!("打开注册表键失败: {}\\{}", hive_name(rule.hive), rule.key))?;
     match rule.kind {
         RegistryValueKind::Dword => {
-            let v: u32 = key.get_value(&rule.value_name).with_context(|| format!("读取 DWORD 失败: {}", rule.value_name))?;
+            let v: u32 = key
+                .get_value(&rule.value_name)
+                .with_context(|| format!("读取 DWORD 失败: {}", rule.value_name))?;
             Ok(match &rule.expected {
                 RegistryExpectedValue::DwordAtLeast(min) => v >= *min,
                 RegistryExpectedValue::DwordEquals(eq) => v == *eq,
@@ -45,10 +51,14 @@ pub fn detect_registry_rule(rule: &RegistryValueRule) -> Result<bool> {
             })
         }
         RegistryValueKind::Sz => {
-            let v: String = key.get_value(&rule.value_name).with_context(|| format!("读取 SZ 失败: {}", rule.value_name))?;
+            let v: String = key
+                .get_value(&rule.value_name)
+                .with_context(|| format!("读取 SZ 失败: {}", rule.value_name))?;
             Ok(match &rule.expected {
                 RegistryExpectedValue::SzEquals(eq) => v == *eq,
-                RegistryExpectedValue::DwordAtLeast(_) | RegistryExpectedValue::DwordEquals(_) => false,
+                RegistryExpectedValue::DwordAtLeast(_) | RegistryExpectedValue::DwordEquals(_) => {
+                    false
+                }
             })
         }
     }
@@ -81,7 +91,9 @@ pub fn detect_dotnet_fx48_installed() -> Result<bool> {
     let key = hklm
         .open_subkey("SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full")
         .context("打开 .NET Framework v4\\Full 注册表键失败")?;
-    let release: u32 = key.get_value("Release").context("读取 .NET Release 值失败")?;
+    let release: u32 = key
+        .get_value("Release")
+        .context("读取 .NET Release 值失败")?;
     Ok(release >= 528040)
 }
 
@@ -98,7 +110,9 @@ pub fn detect_vcredist_2015_2022_x64_installed() -> Result<bool> {
     let key = hklm
         .open_subkey("SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64")
         .context("打开 VC++ Runtime x64 注册表键失败")?;
-    let installed: u32 = key.get_value("Installed").context("读取 Installed 值失败")?;
+    let installed: u32 = key
+        .get_value("Installed")
+        .context("读取 Installed 值失败")?;
     Ok(installed == 1)
 }
 
@@ -139,4 +153,3 @@ pub fn delete_hklm_run(name: &str) -> Result<()> {
     let _ = key.delete_value(name);
     Ok(())
 }
-

@@ -97,4 +97,3 @@ pub struct CreatedShortcut {
     /// 快捷方式文件完整路径（`.lnk`）。
     pub path: String,
 }
-
